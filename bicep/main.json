@@ -1,0 +1,230 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.9.1.41621",
+      "templateHash": "7367882069813983822"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "canadacentral",
+      "allowedValues": [
+        "canadacentral",
+        "canadaeast",
+        "eastus"
+      ],
+      "metadata": {
+        "description": "The location where the resource will be created"
+      }
+    },
+    "storageName": {
+      "type": "string",
+      "defaultValue": "strlgapp9x",
+      "metadata": {
+        "description": "The name of the Azure Storage used for the logic app and for the JSON of the transcription"
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "[format('asp-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "The name of the app service plan used for the logic app"
+      }
+    },
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "[format('logi-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "The name of the logic app resources"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "defaultValue": "[format('log-wrk-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "The name of the Log Analytics"
+      }
+    },
+    "appinsightName": {
+      "type": "string",
+      "defaultValue": "[format('appinsight-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "The name of the application insights"
+      }
+    },
+    "displayName": {
+      "type": "secureString",
+      "metadata": {
+        "description": "The account used for the connection to the Word Online Business API"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "accessTier": "Hot"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2021-06-01",
+      "name": "[format('{0}/default/transcription', parameters('storageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2021-06-01",
+      "name": "[format('{0}/default/word', parameters('storageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2020-03-01-preview",
+      "name": "[parameters('workspace')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[parameters('appinsightName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "tier": "WorkflowStandard",
+        "name": "WS1"
+      },
+      "kind": "windows"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "workflowapp,functionapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "siteConfig": {
+          "netFrameworkVersion": "v4.6",
+          "appSettings": [
+            {
+              "name": "APP_KIND",
+              "value": "workflowApp"
+            },
+            {
+              "name": "AzureFunctionsJobHost__extensionBundle__id",
+              "value": "Microsoft.Azure.Functions.ExtensionBundle.Workflows"
+            },
+            {
+              "name": "AzureFunctionsJobHost__extensionBundle__version",
+              "value": "[1.*, 2.0.0)"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "FUNCTIONS_V2_COMPATIBILITY_MODE",
+              "value": "true"
+            },
+            {
+              "name": "WORKFLOWS_SUBSCRIPTION_ID",
+              "value": "[subscription().subscriptionId]"
+            },
+            {
+              "name": "WORKFLOWS_LOCATION_NAME",
+              "value": "[parameters('location')]"
+            },
+            {
+              "name": "WORKFLOWS_RESOURCE_GROUP_NAME",
+              "value": "[resourceGroup().name]"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~14"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appinsightName'))).InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appinsightName'))).ConnectionString]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "logicapp98"
+            }
+          ],
+          "use32BitWorkerProcess": true
+        },
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "clientAffinityEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', parameters('appinsightName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "wordonlinebusiness",
+      "location": "[parameters('location')]",
+      "kind": "V2",
+      "properties": {
+        "displayName": "[parameters('displayName')]",
+        "api": {
+          "id": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/wordonlinebusiness', subscription().subscriptionId, parameters('location'))]"
+        }
+      }
+    }
+  ]
+}

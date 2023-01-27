@@ -21,6 +21,10 @@ param workspace string = 'log-wrk-${uniqueString(resourceGroup().id)}'
 @description('The name of the application insights')
 param appinsightName string = 'appinsight-${uniqueString(resourceGroup().id)}'
 
+@description('The account used for the connection to the Word Online Business API')
+@secure()
+param displayName string
+
 resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   name: storageName
   location: location
@@ -32,6 +36,14 @@ resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
     supportsHttpsTrafficOnly: true
     accessTier: 'Hot'
   }
+}
+
+resource containerTranscription 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-06-01' = {
+  name: '${storage.name}/default/transcription'
+}
+
+resource containerWord 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-06-01' = {
+  name: '${storage.name}/default/word'
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2020-03-01-preview' = {
@@ -138,5 +150,17 @@ resource logiapp 'Microsoft.Web/sites@2021-02-01' = {
     }
     serverFarmId: webFarm.id
     clientAffinityEnabled: false    
+  }
+}
+
+resource wordbusiness 'Microsoft.Web/connections@2016-06-01' = {
+  name: 'wordonlinebusiness'
+  location: location
+  kind: 'V2'  
+  properties: {
+    displayName: displayName
+    api: {
+      id: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Web/locations/${location}/managedApis/wordonlinebusiness'     
+    }   
   }
 }
